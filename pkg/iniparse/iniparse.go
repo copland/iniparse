@@ -1,22 +1,50 @@
-package main
+package iniparse
 
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 )
 
-type section struct {
-	name string
-	keys map[string]string
+// Section represents a section of a ini file
+// headed by [Name]
+type Section struct {
+	Name string
+	Keys map[string]string
 }
 
-func (p *section) String() string {
-	res := fmt.Sprintf("[%s]\n", p.name)
-	for k, v := range p.keys {
+// KeyIsPresent returns true if the key exists in the section
+// and false if not
+func (s *Section) KeyIsPresent(key string) bool {
+	if _, ok := s.Keys[key]; ok {
+		return true
+	}
+	return false
+}
+
+// String converts an Section to human readable output
+func (s *Section) String() string {
+	res := fmt.Sprintf("[%s]\n", s.Name)
+	for k, v := range s.Keys {
 		res += fmt.Sprintf("%s=%s\n", k, v)
 	}
 	return res
+}
+
+// IniFile represents an ini file
+type IniFile struct {
+	Path     string
+	Sections []*Section
+}
+
+// NewIniFile constructs an IniFile from a file path
+func NewIniFile(path string) (*IniFile, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error: could not read file: %s\n", path)
+	}
+	tokens := tokenize(data)
+	sections := parse(tokens)
+	return &IniFile{path, sections}, nil
 }
 
 func check(e error) {
@@ -25,10 +53,8 @@ func check(e error) {
 	}
 }
 
-// TODO(copland): this is messy and should be cleaned up
-// build an AST instead of iterating through the list
-func parse(tokens []string) []*section {
-	var sections []*section
+func parse(tokens []string) []*Section {
+	var sections []*Section
 	i := 0
 	for i < len(tokens) {
 		if tokens[i] == "[" {
@@ -42,7 +68,7 @@ func parse(tokens []string) []*section {
 				}
 				offset++
 			}
-			section := &section{name: header, keys: keys}
+			section := &Section{Name: header, Keys: keys}
 			sections = append(sections, section)
 			i = offset
 		} else {
@@ -77,26 +103,4 @@ func tokenize(stream []byte) []string {
 		}
 	}
 	return tokens
-}
-
-func main() {
-	if len(os.Args) < 1 {
-		fmt.Printf("error: expected 1 argument: file path\n")
-		os.Exit(1)
-	}
-	iniFile := os.Args[1]
-	data, err := ioutil.ReadFile(iniFile)
-	if err != nil {
-		fmt.Printf("error: could not read file: %s\n", err)
-		os.Exit(1)
-	}
-
-	tokens := tokenize(data)
-	sections := parse(tokens)
-
-	// TODO(copland): provide query capabilities
-
-	for _, section := range sections {
-		fmt.Printf("%s\n", section)
-	}
 }
