@@ -72,7 +72,7 @@ var list = cli.Command{
 	Action: func(c *cli.Context) error {
 		awsProfiles, err := loadAwsCredentials("")
 		if err != nil {
-			panic(err)
+			return err
 		}
 		sort.Sort(awsProfiles)
 		for _, profile := range awsProfiles {
