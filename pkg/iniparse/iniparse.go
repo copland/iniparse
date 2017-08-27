@@ -3,6 +3,8 @@ package iniparse
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
+	"sort"
 )
 
 // Section represents a section of a ini file
@@ -21,12 +23,24 @@ func (s *Section) KeyIsPresent(key string) bool {
 	return false
 }
 
+func (s *Section) getSortedKeys() []string {
+
+	var keys []string
+	for k := range s.Keys {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // String converts an Section to human readable output
 func (s *Section) String() string {
 	res := fmt.Sprintf("[%s]\n", s.Name)
-	for k, v := range s.Keys {
-		res += fmt.Sprintf("%s=%s\n", k, v)
+
+	for _, k := range s.getSortedKeys() {
+		res += fmt.Sprintf("%s = %s\n", k, s.Keys[k])
 	}
+	res += fmt.Sprintf("\n")
 	return res
 }
 
@@ -36,21 +50,32 @@ type IniFile struct {
 	Sections []*Section
 }
 
-// NewIniFile constructs an IniFile from a file path
-func NewIniFile(path string) (*IniFile, error) {
+// Load constructs an IniFile from a file path
+func (iniFile *IniFile) Load(path string) error {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error: could not read file: %s\n", path)
+		return fmt.Errorf("error: could not read file: %s\n", path)
 	}
 	tokens := tokenize(data)
 	sections := parse(tokens)
-	return &IniFile{path, sections}, nil
+	iniFile.Path = path
+	iniFile.Sections = sections
+	return nil
 }
 
-func check(e error) {
-	if e != nil {
-		panic(e)
+// Dump writes the current contents of Sections to Path
+func (iniFile *IniFile) Dump() error {
+	f, err := os.Create(iniFile.Path)
+	if err != nil {
+		return nil
 	}
+	defer f.Close()
+
+	for _, section := range iniFile.Sections {
+		f.WriteString(section.String())
+	}
+	f.Sync()
+	return nil
 }
 
 func parse(tokens []string) []*Section {
