@@ -11,6 +11,9 @@ import (
 )
 
 type awsProfiles []*ini.Section
+type awsProfile struct {
+	data ini.Section
+}
 
 // Len returns the count of sections
 func (profiles awsProfiles) Len() int {
@@ -27,6 +30,15 @@ func (profiles awsProfiles) Less(i, j int) bool {
 // in the profiles
 func (profiles awsProfiles) Swap(i, j int) {
 	profiles[i], profiles[j] = profiles[j], profiles[i]
+}
+
+func (profiles awsProfiles) getProfile(name string) (*awsProfile, error) {
+	for _, profile := range profiles {
+		if profile.Name == name {
+			return &awsProfile{data: *profile}, nil
+		}
+	}
+	return nil, fmt.Errorf("error: could not find profile %s", name)
 }
 
 func loadAwsCredentials(credsPath string) (awsProfiles, error) {
@@ -47,22 +59,17 @@ func loadAwsCredentials(credsPath string) (awsProfiles, error) {
 
 }
 
-func (profiles awsProfiles) activateProfile(profileToActivate string) error {
-	for _, profile := range profiles {
-		if profile.Name == profileToActivate {
-			if !profile.KeyIsPresent("aws_access_key_id") {
-				return fmt.Errorf("error: profile is missing aws_access_key_id")
-			}
-			if !profile.KeyIsPresent("aws_secret_access_key") {
-				return fmt.Errorf("error: profile is missing aws_secret_access_key")
-			}
-			fmt.Printf("export AWS_DEFAULT_PROFILE=%s\n", profile.Name)
-			fmt.Printf("export AWS_ACCESS_KEY_ID=%s\n", profile.Keys["aws_access_key_id"])
-			fmt.Printf("export AWS_SECRET_ACCESS_KEY=%s\n", profile.Keys["aws_secret_access_key"])
-			return nil
-		}
+func (profile awsProfile) activate() error {
+	if !profile.data.KeyIsPresent("aws_access_key_id") {
+		return fmt.Errorf("error: profile is missing aws_access_key_id")
 	}
-	return fmt.Errorf("error: could not find profile %s\n", profileToActivate)
+	if !profile.data.KeyIsPresent("aws_secret_access_key") {
+		return fmt.Errorf("error: profile is missing aws_secret_access_key")
+	}
+	fmt.Printf("export AWS_DEFAULT_PROFILE=%s\n", profile.data.Name)
+	fmt.Printf("export AWS_ACCESS_KEY_ID=%s\n", profile.data.Keys["aws_access_key_id"])
+	fmt.Printf("export AWS_SECRET_ACCESS_KEY=%s\n", profile.data.Keys["aws_secret_access_key"])
+	return nil
 }
 
 var list = cli.Command{
@@ -91,7 +98,11 @@ var activate = cli.Command{
 		if err != nil {
 			return err
 		}
-		maybeErr := awsProfiles.activateProfile(c.Args().First())
+		profileToActivate, err := awsProfiles.getProfile(c.Args().First())
+		if err != nil {
+			return err
+		}
+		maybeErr := profileToActivate.activate()
 		return maybeErr
 	},
 }
